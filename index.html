@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cập Nhật Thông Tin Học Sinh</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f6f9;
+        }
+        .container {
+            max-width: 650px;
+            margin: 0 auto;
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        .form-group select, .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        /* Đổi màu viền đỏ cho các ô bắt buộc nếu để trống */
+        .form-group input:required, .form-group select:required {
+            border-left: 4px solid #dc3545;
+        }
+        .form-group select {
+            background-color: #fff;
+            cursor: pointer;
+        }
+        #student-select {
+            background-color: #eef2f7;
+            font-weight: bold;
+        }
+        #dynamic-fields {
+            margin-top: 20px;
+            border-top: 2px dashed #ddd;
+            padding-top: 15px;
+        }
+        .loading {
+            text-align: center;
+            font-style: italic;
+            color: #666;
+        }
+        .btn-submit {
+            width: 100%;
+            padding: 12px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        .btn-submit:hover {
+            background-color: #218838;
+        }
+        .btn-submit:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>CẬP NHẬT THÔNG TIN PHỤ HUYNH</h2>
+    
+    <div class="form-group">
+        <label for="student-select">Chọn học sinh cần sửa thông tin:</label>
+        <select id="student-select" onchange="showStudentDetails()" disabled>
+            <option value="">-- Đang tải danh sách... --</option>
+        </select>
+    </div>
+
+    <form id="update-form" onsubmit="updateData(event)">
+        <input type="hidden" id="row-number" name="_rowNumber">
+
+        <div id="dynamic-fields">
+            <p class="loading" id="status-text">Vui lòng chọn học sinh phía trên để hiển thị thông tin liên quan.</p>
+        </div>
+        
+        <button type="submit" id="btn-save" class="btn-submit" style="display: none;">CẬP NHẬT THÔNG TIN</button>
+    </form>
+</div>
+
+<script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbzVjLX5BKLJY-GN5wtZDQL3v52MLb6V4TcYIV10eX8GSXiwEzzPiO86FKyRcGbVsHf8/exec"; 
+
+    // Các từ khóa lọc trường liên quan từ file Google Sheets
+    const RELATED_KEYWORDS = [
+        "đỡ đầu", "mẹ", "phụ huynh", "giám hộ", 
+        "điện thoại", "sđt", "sdt", "tel", 
+        "dân tộc", "nghề nghiệp", "học vấn", "trình độ", "sinh năm", "năm sinh"
+    ];
+
+    // Danh sách tùy chọn cho "Trình độ học vấn"
+    const HOC_VAN_OPTIONS = [
+        "Sau đại học", "Đại học", "Cao đẳng", "Trung cấp", 
+        "Trung học phổ thông", "Trung học cơ sở", "Tiểu học", "Mẫu giáo"
+    ];
+
+    // Danh sách tùy chọn cho "Nghề nghiệp"
+    const NGHE_NGHIEP_OPTIONS = [
+        "Nông dân", "Công chức", "Nhân viên Y tế", "Giáo viên / Giảng viên",
+        "Kinh doanh tự do / Buôn bán", "Công nhân / Lao động phổ thông",
+        "Nhân viên văn phòng", "Kỹ sư / Kỹ thuật viên", "Công nghệ thông tin (IT)",
+        "Tài xế / Tài xế công nghệ", "Nội trợ", "Hưu trí", "Khác"
+    ];
+
+    let globalStudentsData = []; 
+
+    // Tải danh sách học sinh vào Dropdown khi mở trang
+    async function loadDataToDropdown() {
+        try {
+            const response = await fetch(API_URL);
+            globalStudentsData = await response.json();
+            
+            const selectEl = document.getElementById('student-select');
+            selectEl.innerHTML = '<option value="">-- Chọn một học sinh --</option>';
+            
+            if (globalStudentsData.length === 0) {
+                selectEl.innerHTML = '<option value="">Không có dữ liệu</option>';
+                return;
+            }
+
+            globalStudentsData.forEach((hs, index) => {
+                let keys = Object.keys(hs).filter(k => k !== "_rowNumber");
+                let nameKey = keys[1]; 
+                let studentName = hs[nameKey] || `Học sinh ${index + 1}`;
+                
+                let option = document.createElement('option');
+                option.value = index; 
+                option.textContent = studentName;
+                selectEl.appendChild(option);
+            });
+
+            selectEl.disabled = false; 
+
+        } catch (error) {
+            console.error("Lỗi:", error);
+            document.getElementById('status-text').innerText = "Lỗi kết nối dữ liệu. Vui lòng kiểm tra API!";
+        }
+    }
+
+    // Tự động quét và hiển thị thông tin dạng Input hoặc các Listbox tương ứng
+    function showStudentDetails() {
+        const selectEl = document.getElementById('student-select');
+        const fieldsContainer = document.getElementById('dynamic-fields');
+        const btnSave = document.getElementById('btn-save');
+        const rowInput = document.getElementById('row-number');
+        const selectedIndex = selectEl.value;
+
+        if (selectedIndex === "") {
+            fieldsContainer.innerHTML = '<p class="loading">Vui lòng chọn học sinh phía trên để hiển thị thông tin liên quan.</p>';
+            btnSave.style.display = "none";
+            return;
+        }
+
+        const selectedStudent = globalStudentsData[selectedIndex];
+        fieldsContainer.innerHTML = ""; 
+        
+        rowInput.value = selectedStudent["_rowNumber"];
+        btnSave.style.display = "block"; 
+
+        const allKeys = Object.keys(selectedStudent).filter(k => k !== "_rowNumber");
+        let hasData = false;
+
+        allKeys.forEach(key => {
+            const lowerKey = key.toLowerCase();
+            const isRelated = RELATED_KEYWORDS.some(keyword => lowerKey.includes(keyword));
+
+            if (isRelated) {
+                hasData = true;
+                let formGroup = document.createElement('div');
+                formGroup.className = 'form-group';
+
+                let label = document.createElement('label');
+                label.textContent = key + ":";
+                formGroup.appendChild(label);
+
+                let currentValue = (selectedStudent[key] !== undefined ? selectedStudent[key] : "").toString().trim();
+
+                // 1. XỬ LÝ CHO TRƯỜNG "HỌC VẤN"
+                if (lowerKey.includes("học vấn") || lowerKey.includes("trình độ")) {
+                    let selectBox = document.createElement('select');
+                    selectBox.name = key;
+                    selectBox.required = true; // BẮT BUỘC CHỌN
+
+                    // Nếu giá trị trong Excel không khớp danh sách cố định thì ép chọn lại từ đầu
+                    let isValidValue = HOC_VAN_OPTIONS.includes(currentValue);
+                    
+                    let defaultOpt = document.createElement('option');
+                    defaultOpt.value = ""; // Để value rỗng để thuộc tính 'required' hoạt động
+                    defaultOpt.textContent = isValidValue ? currentValue : "-- Chọn trình độ học vấn --";
+                    if (!isValidValue) defaultOpt.selected = true;
+                    selectBox.appendChild(defaultOpt);
+
+                    HOC_VAN_OPTIONS.forEach(optionText => {
+                        let opt = document.createElement('option');
+                        opt.value = optionText;
+                        opt.textContent = optionText;
+                        if (isValidValue && optionText === currentValue) opt.selected = true;
+                        selectBox.appendChild(opt);
+                    });
+                    formGroup.appendChild(selectBox);
+
+                // 2. XỬ LÝ CHO TRƯỜNG "NGHỀ NGHIỆP"
+                } else if (lowerKey.includes("nghề nghiệp") || lowerKey.includes("nghề")) {
+                    let selectBox = document.createElement('select');
+                    selectBox.name = key;
+                    selectBox.required = true; // BẮT BUỘC CHỌN
+
+                    let isValidValue = NGHE_NGHIEP_OPTIONS.includes(currentValue);
+
+                    let defaultOpt = document.createElement('option');
+                    defaultOpt.value = ""; // Để value rỗng để thuộc tính 'required' hoạt động
+                    defaultOpt.textContent = isValidValue ? currentValue : "-- Chọn nghề nghiệp --";
+                    if (!isValidValue) defaultOpt.selected = true;
+                    selectBox.appendChild(defaultOpt);
+
+                    NGHE_NGHIEP_OPTIONS.forEach(optionText => {
+                        let opt = document.createElement('option');
+                        opt.value = optionText;
+                        opt.textContent = optionText;
+                        if (isValidValue && optionText === currentValue) opt.selected = true;
+                        selectBox.appendChild(opt);
+                    });
+                    formGroup.appendChild(selectBox);
+
+                // 3. CÁC TRƯỜNG CÒN LẠI GIỮ NGUYÊN Ô INPUT TEXT
+                } else {
+                    let input = document.createElement('input');
+                    input.type = "text";
+                    input.name = key; 
+                    input.value = currentValue; 
+                    input.required = true; // BẮT BUỘC NHẬP GIÁ TRỊ
+                    formGroup.appendChild(input);
+                }
+
+                fieldsContainer.appendChild(formGroup);
+            }
+        });
+
+        if (!hasData) {
+            fieldsContainer.innerHTML = '<p class="loading" style="color: red;">Không tìm thấy cột phù hợp nào liên quan đến người đỡ đầu trong file Excel!</p>';
+            btnSave.style.display = "none";
+        }
+    }
+
+    // Gửi dữ liệu cập nhật về Google Sheets
+    async function updateData(event) {
+        event.preventDefault(); 
+
+        // BƯỚC KIỂM TRA BẮT BUỘC: Quét lại toàn bộ form xem có ô nào bị trống không
+        const form = document.getElementById('update-form');
+        const allInputs = form.querySelectorAll('input[required], select[required]');
+        let isFormValid = true;
+        let emptyFields = [];
+
+        allInputs.forEach(element => {
+            if (element.value.trim() === "") {
+                isFormValid = false;
+                // Lấy tên nhãn (Label) phía trước ô để báo lỗi cho rõ ràng
+                let labelText = element.previousElementSibling ? element.previousElementSibling.textContent.replace(':', '') : element.name;
+                emptyFields.push(labelText);
+            }
+        });
+
+        // Nếu phát hiện có ô trống thì chặn ngay và báo lỗi
+        if (!isFormValid) {
+            alert("KHÔNG THỂ CẬP NHẬT!\nVui lòng điền đầy đủ các thông tin sau:\n- " + emptyFields.join("\n- "));
+            return;
+        }
+        
+        const btnSave = document.getElementById('btn-save');
+        btnSave.disabled = true;
+        btnSave.innerText = "ĐANG LƯU DỮ LIỆU...";
+
+        const formData = new FormData(form);
+        const updateObject = {};
+        formData.forEach((value, key) => {
+            updateObject[key] = value;
+        });
+
+        try {
+            const response = await fetch(API_URL, {
+                method: "POST",
+                body: JSON.stringify(updateObject)
+            });
+            const result = await response.json();
+
+            if (result.status === "success") {
+                alert("Cập nhật thông tin lên Google Sheets thành công!");
+                document.getElementById('student-select').disabled = true;
+                document.getElementById('dynamic-fields').innerHTML = '<p class="loading">Đang tải lại dữ liệu mới nhất...</p>';
+                btnSave.style.display = "none";
+                await loadDataToDropdown();
+            } else {
+                alert("Có lỗi xảy ra: " + result.message);
+            }
+        } catch (error) {
+            console.error("Lỗi:", error);
+            alert("Lỗi kết nối mạng, không thể gửi dữ liệu.");
+        } finally {
+            btnSave.disabled = false;
+            btnSave.innerText = "LƯU THÔNG TIN";
+        }
+    }
+
+    loadDataToDropdown();
+</script>
+
+</body>
+</html>
